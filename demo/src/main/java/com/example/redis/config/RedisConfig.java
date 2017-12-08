@@ -1,6 +1,8 @@
 package com.example.redis.config;
 
 import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CachingConfigurerSupport;
@@ -42,12 +44,17 @@ public class RedisConfig extends CachingConfigurerSupport{
     public CacheManager cacheManager(RedisTemplate redisTemplate) {
         RedisCacheManager rcm = new RedisCacheManager(redisTemplate);
         //设置缓存过期时间
-        //rcm.setDefaultExpiration(60);//秒
+        // rcm.setDefaultExpiration(60);//秒
+        //设置value的过期时间
+        Map<String,Long> map=new HashMap<String, Long>();
+        map.put("test",60L);
+        rcm.setExpires(map);
         return rcm;
     }
     
     @Bean
     public RedisTemplate<String, String> redisTemplate(RedisConnectionFactory factory) {
+    	//factory 是根据配置文件得到的
         StringRedisTemplate template = new StringRedisTemplate(factory);
         Jackson2JsonRedisSerializer jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer(Object.class);
         ObjectMapper om = new ObjectMapper();
