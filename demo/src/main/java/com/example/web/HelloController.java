@@ -2,10 +2,15 @@ package com.example.web;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
+import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpSession;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
@@ -19,6 +24,10 @@ import com.example.SpringData.dao.UserRepository;
 import com.example.SpringData.domain.User;
 import com.example.redis.util.RedisUtil;
 import com.example.redis.util.SerializeUtil;
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Created by Brave on 16/10/9.
@@ -38,7 +47,16 @@ public class HelloController {
     public void saveUser(User user) {
     	User u = userRepository.save(user);
     	HashOperations<String,String,Object> operations=redisTemplate.opsForHash();
-    	operations.putIfAbsent(User.class.toString(),u.getId().toString(),SerializeUtil.serialize(u));
+    	ObjectMapper objectmapper = new ObjectMapper();
+    	try {
+			String userStr = objectmapper.writeValueAsString(u);
+			Map<String,String> hash = new LinkedHashMap<String,String>();
+			hash.put(u.getId().toString(), userStr);
+	    	operations.putAll(User.class.toString(), hash);
+		} catch (JsonProcessingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
         System.out.println("存成功了");  
     }
     
@@ -50,9 +68,25 @@ public class HelloController {
     }
     @RequestMapping("/getUserById")
     public User getUserById(Long id) {
-    	User user = (User)RedisUtil.mysqlgetById(User.class.toString(), id.toString());
-    	if(user ==null){
+    	ObjectMapper objectmapper = new ObjectMapper();
+		String uStr = (String) mysqlgetById(User.class.toString(), id.toString());
+		User user = new User();
+		if(uStr ==null){
     		user = mysqlgetUserById(id);
+    	}else{
+    		try {
+    			user = objectmapper.readValue(uStr, User.class);
+    		} catch (JsonParseException e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		} catch (JsonMappingException e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		} catch (IOException e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		}
+        	
     	}
         return user;
     }
@@ -77,5 +111,21 @@ public class HelloController {
     	List<User> users=userRepository.findAll();
     	System.out.println("若下面没出现“无缓存的时候调用”字样且能打印出数据表示测试成功");  
         return users;
+    }
+    
+    public Object mysqlgetById(String className,String id){
+    	HashOperations<String,Long,Object> operations=redisTemplate.opsForHash();
+    	return(operations.get(className, id));
+    }
+    
+    @RequestMapping("/uid")
+    //sesionid 做键  uid做值 key如spring:session:sessions:ff325db0-a88b-4510-8fee-d65266980219
+    String uid(HttpSession session) {
+        UUID uid = (UUID) session.getAttribute("uid");
+        if (uid == null) {
+            uid = UUID.randomUUID();
+        }
+        session.setAttribute("uid", uid);
+        return session.getId();
     }
 }
